@@ -135,7 +135,7 @@
 }
 
 /* Make the editor take up all available space */
-.editor-wrapper > div {
+.editor-wrapper > section {
   flex: 1;
 }
 

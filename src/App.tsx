@@ -22,79 +22,50 @@ function App() {
   const [outputText, setOutputText] = useState<string>("");
   const [selectedTimezone, setSelectedTimezone] =
     useState<TimezoneType>("America/Chicago");
+  const [replaceTimestamp, setReplaceTimestamp] = useState<boolean>(false);
 
-  // Function to format date based on selected timezone
+  const convertTimestamp = (match: string) => {
+    try {
+      const timestamp = parseInt(match, 10);
+      const date = new Date(timestamp);
 
-  // Function to detect and convert Unix timestamps
+      if (
+        !isNaN(date.getTime()) &&
+        date.getFullYear() >= 1975 &&
+        date.getFullYear() <= 2050
+      ) {
+        const formattedDate = formatTimestamp(date, selectedTimezone);
+        return replaceTimestamp ? formattedDate : `${match} [${formattedDate}]`;
+      }
+      return match;
+    } catch (e) {
+      return match;
+    }
+  };
+
   const convertTimestamps = (text: string): string => {
     if (!text) return "";
 
-    // Process the text in two passes - first for millisecond timestamps, then for second timestamps
-
-    // Regular expression to match Unix millisecond timestamps (13 digits)
     const msTimestampRegex = /(\b\d{13}\b)/g;
-
-    // First pass - convert millisecond timestamps
     let processedText = text.replace(msTimestampRegex, (match) => {
-      try {
-        const timestamp = parseInt(match, 10);
-        const date = new Date(timestamp);
-
-        // Check if the date is valid and within reasonable range (1975-2050)
-        if (
-          !isNaN(date.getTime()) &&
-          date.getFullYear() >= 1975 &&
-          date.getFullYear() <= 2050
-        ) {
-          // Format based on selected timezone
-          const formattedDate = formatTimestamp(date, selectedTimezone);
-          return `${match} [${formattedDate}]`;
-        }
-        return match; // Return original if not a valid timestamp or out of range
-      } catch (e) {
-        return match; // Return original on error
-      }
+      return convertTimestamp(match);
     });
 
-    // Regular expression to match Unix second timestamps (10 digits)
     const secTimestampRegex = /(\b\d{10}\b)/g;
-
-    // Second pass - convert second timestamps
     processedText = processedText.replace(secTimestampRegex, (match) => {
-      try {
-        const timestamp = parseInt(match, 10) * 1000; // Convert seconds to milliseconds
-        const date = new Date(timestamp);
-
-        // Check if the date is valid and within reasonable range (1975-2050)
-        if (
-          !isNaN(date.getTime()) &&
-          date.getFullYear() >= 1975 &&
-          date.getFullYear() <= 2050
-        ) {
-          // Format based on selected timezone
-          const formattedDate = formatTimestamp(date, selectedTimezone);
-          return `${match} [${formattedDate}]`;
-        }
-        return match; // Return original if not a valid timestamp or out of range
-      } catch (e) {
-        return match; // Return original on error
-      }
+      return convertTimestamp(match);
     });
 
     return processedText;
   };
 
-  // Update output text whenever input text changes or timezone changes
   useEffect(() => {
     setOutputText(convertTimestamps(inputText));
-  }, [inputText, selectedTimezone]);
-
-  // Handle clear button click
+  }, [inputText, selectedTimezone, replaceTimestamp]);
   const handleClear = () => {
     setInputText("");
   };
 
-  // Generate current timestamp
   const handleInsertCurrentTimestamp = () => {
     const now = Date.now();
     const nowInSeconds = Math.floor(now / 1000);
@@ -135,6 +106,15 @@ function App() {
         >
           Insert Current Timestamp
         </button>
+        <div className="checkbox-control">
+          <input
+            type="checkbox"
+            id="replace-timestamp"
+            checked={replaceTimestamp}
+            onChange={(e) => setReplaceTimestamp(e.target.checked)}
+          />
+          <label htmlFor="replace-timestamp">Replace timestamp</label>
+        </div>
       </div>
       <div className="editor-container">
         <div className="editor-wrapper">

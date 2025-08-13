@@ -23,10 +23,10 @@ function App() {
   const [selectedTimezone, setSelectedTimezone] =
     useState<TimezoneType>("America/Chicago");
   const [replaceTimestamp, setReplaceTimestamp] = useState<boolean>(false);
+  const [useJavaFormat, setUseJavaFormat] = useState<boolean>(false);
 
-  const convertTimestamp = (match: string) => {
+  const convertTimestamp = (timestamp: number) => {
     try {
-      const timestamp = parseInt(match, 10);
       const date = new Date(timestamp);
 
       if (
@@ -34,12 +34,25 @@ function App() {
         date.getFullYear() >= 1975 &&
         date.getFullYear() <= 2050
       ) {
-        const formattedDate = formatTimestamp(date, selectedTimezone);
-        return replaceTimestamp ? formattedDate : `${match} [${formattedDate}]`;
+        let formattedDate;
+        if (useJavaFormat) {
+          formattedDate = format(
+            date,
+            "yyyy-MM-dd'T'HH:mm:ssXXX['" + selectedTimezone + "']",
+            {
+              timeZone: selectedTimezone,
+            }
+          );
+        } else {
+          formattedDate = formatTimestamp(date, selectedTimezone);
+        }
+        return replaceTimestamp
+          ? formattedDate
+          : `${timestamp} [${formattedDate}]`;
       }
-      return match;
+      return timestamp.toString();
     } catch (e) {
-      return match;
+      return timestamp.toString();
     }
   };
 
@@ -48,12 +61,12 @@ function App() {
 
     const msTimestampRegex = /(\b\d{13}\b)/g;
     let processedText = text.replace(msTimestampRegex, (match) => {
-      return convertTimestamp(match);
+      return convertTimestamp(parseInt(match));
     });
 
     const secTimestampRegex = /(\b\d{10}\b)/g;
     processedText = processedText.replace(secTimestampRegex, (match) => {
-      return convertTimestamp(match);
+      return convertTimestamp(parseInt(match) * 1000);
     });
 
     return processedText;
@@ -61,7 +74,7 @@ function App() {
 
   useEffect(() => {
     setOutputText(convertTimestamps(inputText));
-  }, [inputText, selectedTimezone, replaceTimestamp]);
+  }, [inputText, selectedTimezone, replaceTimestamp, useJavaFormat]);
   const handleClear = () => {
     setInputText("");
   };
@@ -97,23 +110,36 @@ function App() {
         </div>
       </header>
       <div className="controls">
-        <button className="control-button" onClick={handleClear}>
-          Clear
-        </button>
-        <button
-          className="control-button"
-          onClick={handleInsertCurrentTimestamp}
-        >
-          Insert Current Timestamp
-        </button>
-        <div className="checkbox-control">
-          <input
-            type="checkbox"
-            id="replace-timestamp"
-            checked={replaceTimestamp}
-            onChange={(e) => setReplaceTimestamp(e.target.checked)}
-          />
-          <label htmlFor="replace-timestamp">Replace timestamp</label>
+        <div>
+          <button className="control-button" onClick={handleClear}>
+            Clear
+          </button>
+          <button
+            className="control-button"
+            onClick={handleInsertCurrentTimestamp}
+          >
+            Insert Current Timestamp
+          </button>
+        </div>
+        <div className="checkbox-controls">
+          <div className="checkbox-control">
+            <input
+              type="checkbox"
+              id="replace-timestamp"
+              checked={replaceTimestamp}
+              onChange={(e) => setReplaceTimestamp(e.target.checked)}
+            />
+            <label htmlFor="replace-timestamp">Replace timestamp</label>
+          </div>
+          <div className="checkbox-control">
+            <input
+              type="checkbox"
+              id="java-format"
+              checked={useJavaFormat}
+              onChange={(e) => setUseJavaFormat(e.target.checked)}
+            />
+            <label htmlFor="java-format">Use Java datetime format</label>
+          </div>
         </div>
       </div>
       <div className="editor-container">

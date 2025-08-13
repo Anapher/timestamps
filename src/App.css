@@ -58,19 +58,24 @@
 
 .controls {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  padding: 10px;
   margin: 10px 0;
   background-color: #252525;
   border-bottom: 1px solid #333;
+}
+
+.checkbox-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .checkbox-control {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-left: 10px;
   color: #ccc;
   font-size: 0.9rem;
 }
@@ -91,6 +96,7 @@
   font-size: 0.9rem;
   cursor: pointer;
   transition: background-color 0.2s;
+  margin-right: 10px;
 }
 
 .control-button:hover {

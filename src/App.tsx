@@ -1,10 +1,29 @@
 import React, { useState, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import "./App.css";
+import { format } from "date-fns-tz";
+
+// Timezone types
+type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam";
+const SUPPORTED_TIMEZONES: TimezoneType[] = [
+  "UTC",
+  "America/Chicago",
+  "Europe/Amsterdam",
+];
+
+const formatTimestamp = (date: Date, timezone: TimezoneType): string => {
+  return format(date, "yyyy-MM-dd HH:mm:ssXXX", {
+    timeZone: timezone,
+  });
+};
 
 function App() {
   const [inputText, setInputText] = useState<string>("");
   const [outputText, setOutputText] = useState<string>("");
+  const [selectedTimezone, setSelectedTimezone] =
+    useState<TimezoneType>("America/Chicago");
+
+  // Function to format date based on selected timezone
 
   // Function to detect and convert Unix timestamps
   const convertTimestamps = (text: string): string => {
@@ -27,10 +46,9 @@ function App() {
           date.getFullYear() >= 1975 &&
           date.getFullYear() <= 2050
         ) {
-          // Format with ISO string and local time with timezone
-          const isoString = date.toISOString().replace("T", " ").slice(0, 19);
-          const localString = date.toString();
-          return `${match} [UTC: ${isoString} | Local: ${localString}]`;
+          // Format based on selected timezone
+          const formattedDate = formatTimestamp(date, selectedTimezone);
+          return `${match} [${formattedDate}]`;
         }
         return match; // Return original if not a valid timestamp or out of range
       } catch (e) {
@@ -53,10 +71,9 @@ function App() {
           date.getFullYear() >= 1975 &&
           date.getFullYear() <= 2050
         ) {
-          // Format with ISO string and local time with timezone
-          const isoString = date.toISOString().replace("T", " ").slice(0, 19);
-          const localString = date.toString();
-          return `${match} [UTC: ${isoString} | Local: ${localString}]`;
+          // Format based on selected timezone
+          const formattedDate = formatTimestamp(date, selectedTimezone);
+          return `${match} [${formattedDate}]`;
         }
         return match; // Return original if not a valid timestamp or out of range
       } catch (e) {
@@ -67,10 +84,10 @@ function App() {
     return processedText;
   };
 
-  // Update output text whenever input text changes
+  // Update output text whenever input text changes or timezone changes
   useEffect(() => {
     setOutputText(convertTimestamps(inputText));
-  }, [inputText]);
+  }, [inputText, selectedTimezone]);
 
   // Handle clear button click
   const handleClear = () => {
@@ -94,6 +111,19 @@ function App() {
       <header className="App-header">
         <h1>Timestamp Converter</h1>
         <p>Enter text with Unix timestamps (milliseconds or seconds)</p>
+        <div className="timezone-toggle">
+          {SUPPORTED_TIMEZONES.map((timezone) => (
+            <button
+              key={timezone}
+              className={`timezone-button ${
+                selectedTimezone === timezone ? "active" : ""
+              }`}
+              onClick={() => setSelectedTimezone(timezone)}
+            >
+              {timezone}
+            </button>
+          ))}
+        </div>
       </header>
       <div className="controls">
         <button className="control-button" onClick={handleClear}>

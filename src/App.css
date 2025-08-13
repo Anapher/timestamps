@@ -28,6 +28,34 @@
   opacity: 0.8;
 }
 
+.timezone-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.timezone-button {
+  background-color: #333;
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timezone-button:hover {
+  background-color: #444;
+  color: white;
+}
+
+.timezone-button.active {
+  background-color: #0e639c;
+  color: white;
+  border-color: #0e639c;
+}
+
 .controls {
   display: flex;
   justify-content: center;

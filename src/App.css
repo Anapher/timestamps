@@ -144,3 +144,11 @@
     flex-direction: row;
   }
 }
+
+/* Timestamp highlighting */
+.timestamp-highlight {
+  background-color: rgba(65, 105, 225, 0.3);
+  border-bottom: 1px solid #6495ed;
+  border-radius: 2px;
+  font-weight: bold;
+}

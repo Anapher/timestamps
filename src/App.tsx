@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
-import Editor from "@monaco-editor/react";
+import React, { useState, useEffect, useRef } from "react";
+import Editor, { Monaco } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
 import "./App.css";
 import { format } from "date-fns-tz";
+import _ from "lodash";
 
 // Timezone types
 type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam";
@@ -24,6 +26,19 @@ function App() {
     useState<TimezoneType>("America/Chicago");
   const [replaceTimestamp, setReplaceTimestamp] = useState<boolean>(false);
   const [useJavaFormat, setUseJavaFormat] = useState<boolean>(false);
+
+  // References for Monaco editor instances
+  const outputEditorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(
+    null
+  );
+  const monacoRef = useRef<Monaco | null>(null);
+
+  // Reference for decorations collection
+  const decorationsCollectionRef =
+    useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
+
+  // Store the positions of converted timestamps for highlighting
+  const [highlightRanges, setHighlightRanges] = useState<monaco.Range[]>([]);
 
   const convertTimestamp = (timestamp: number) => {
     try {
@@ -56,25 +71,132 @@ function App() {
     }
   };
 
-  const convertTimestamps = (text: string): string => {
-    if (!text) return "";
+  const convertTimestamps = (
+    text: string
+  ): { text: string; ranges: { start: number; end: number }[] } => {
+    if (!text) return { text: "", ranges: [] };
 
-    const msTimestampRegex = /(\b\d{13}\b)/g;
-    let processedText = text.replace(msTimestampRegex, (match) => {
-      return convertTimestamp(parseInt(match));
-    });
+    let result = text;
 
-    const secTimestampRegex = /(\b\d{10}\b)/g;
-    processedText = processedText.replace(secTimestampRegex, (match) => {
-      return convertTimestamp(parseInt(match) * 1000);
-    });
+    // Process millisecond timestamps (13 digits)
+    const matches: {
+      index: number;
+      match: string;
+      processor: (match: string) => string;
+    }[] = [];
 
-    return processedText;
+    const addMatches = (
+      regexPattern: RegExp,
+      processor: (match: string) => string
+    ) => {
+      let match: RegExpExecArray | null;
+      while ((match = regexPattern.exec(text)) !== null) {
+        matches.push({ index: match.index, match: match[0], processor });
+      }
+    };
+
+    addMatches(/(\b\d{13}\b)/g, (match) => convertTimestamp(parseInt(match)));
+    addMatches(/(\b\d{10}\b)/g, (match) =>
+      convertTimestamp(parseInt(match) * 1000)
+    );
+
+    const sortedMatches = _.orderBy(matches, ["index"], ["asc"]);
+    const processedRanges: { start: number; end: number }[] = [];
+    let offset = 0;
+
+    for (let i = 0; i < sortedMatches.length; i++) {
+      const { index, match: matchText, processor } = sortedMatches[i];
+      const converted = processor(matchText);
+
+      if (converted !== matchText) {
+        result =
+          result.substring(0, index + offset) +
+          converted +
+          result.substring(index + matchText.length + offset);
+
+        processedRanges.push({
+          start: index + offset,
+          end: index + converted.length + offset,
+        });
+        offset += converted.length - matchText.length;
+      }
+    }
+    return { text: result, ranges: processedRanges };
   };
 
   useEffect(() => {
-    setOutputText(convertTimestamps(inputText));
+    const result = convertTimestamps(inputText);
+    setOutputText(result.text);
+
+    // Convert the ranges to Monaco Range objects
+    if (monacoRef.current && outputEditorRef.current) {
+      const monaco = monacoRef.current;
+      const newRanges = result.ranges.map((range) => {
+        const startPos = outputEditorRef
+          .current!.getModel()!
+          .getPositionAt(range.start);
+        const endPos = outputEditorRef
+          .current!.getModel()!
+          .getPositionAt(range.end);
+        return new monaco.Range(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column
+        );
+      });
+
+      setHighlightRanges(newRanges);
+    }
   }, [inputText, selectedTimezone, replaceTimestamp, useJavaFormat]);
+
+  // Apply decorations whenever highlightRanges changes
+  useEffect(() => {
+    if (outputEditorRef.current && highlightRanges.length > 0) {
+      const decorations = highlightRanges.map((range) => ({
+        range,
+        options: {
+          inlineClassName: "timestamp-highlight",
+          isWholeLine: false,
+        },
+      }));
+
+      // Clear previous decorations if they exist
+      if (decorationsCollectionRef.current) {
+        decorationsCollectionRef.current.clear();
+      } else {
+        // Create a new decorations collection if it doesn't exist
+        decorationsCollectionRef.current =
+          outputEditorRef.current.createDecorationsCollection(decorations);
+        return;
+      }
+
+      // Set new decorations
+      decorationsCollectionRef.current.set(decorations);
+    }
+  }, [highlightRanges, outputText]);
+
+  // Handle Monaco editor initialization
+  const handleEditorDidMount = (
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monaco: Monaco
+  ) => {
+    outputEditorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Create initial decorations collection
+    if (highlightRanges.length > 0) {
+      const decorations = highlightRanges.map((range) => ({
+        range,
+        options: {
+          inlineClassName: "timestamp-highlight",
+          isWholeLine: false,
+        },
+      }));
+      decorationsCollectionRef.current =
+        editor.createDecorationsCollection(decorations);
+    }
+  };
   const handleClear = () => {
     setInputText("");
   };
@@ -165,6 +287,7 @@ function App() {
             defaultLanguage="plaintext"
             value={outputText}
             theme="vs-dark"
+            onMount={handleEditorDidMount}
             options={{
               readOnly: true,
               minimap: { enabled: false },

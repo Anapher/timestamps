@@ -21,7 +21,6 @@ const formatTimestamp = (date: Date, timezone: TimezoneType): string => {
 
 function App() {
   const [inputText, setInputText] = useState<string>("");
-  const [outputText, setOutputText] = useState<string>("");
   const [selectedTimezone, setSelectedTimezone] =
     useState<TimezoneType>("America/Chicago");
   const [replaceTimestamp, setReplaceTimestamp] = useState<boolean>(false);
@@ -126,18 +125,15 @@ function App() {
 
   useEffect(() => {
     const result = convertTimestamps(inputText);
-    setOutputText(result.text);
+    const editor = outputEditorRef.current?.getModel();
 
     // Convert the ranges to Monaco Range objects
-    if (monacoRef.current && outputEditorRef.current) {
-      const monaco = monacoRef.current;
+    if (editor) {
+      editor.setValue(result.text);
+
       const newRanges = result.ranges.map((range) => {
-        const startPos = outputEditorRef
-          .current!.getModel()!
-          .getPositionAt(range.start);
-        const endPos = outputEditorRef
-          .current!.getModel()!
-          .getPositionAt(range.end);
+        const startPos = editor.getPositionAt(range.start);
+        const endPos = editor.getPositionAt(range.end);
         return new monaco.Range(
           startPos.lineNumber,
           startPos.column,
@@ -174,7 +170,7 @@ function App() {
       // Set new decorations
       decorationsCollectionRef.current.set(decorations);
     }
-  }, [highlightRanges, outputText]);
+  }, [highlightRanges]);
 
   // Handle Monaco editor initialization
   const handleEditorDidMount = (
@@ -285,7 +281,6 @@ function App() {
           <Editor
             height="300px"
             defaultLanguage="plaintext"
-            value={outputText}
             theme="vs-dark"
             onMount={handleEditorDidMount}
             options={{

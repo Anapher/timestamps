@@ -5,6 +5,7 @@ import "./App.css";
 import { format } from "date-fns-tz";
 import _ from "lodash";
 import { computeMonacoEdits } from "./text-utils";
+import { getTime, parseISO } from "date-fns";
 
 type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam";
 type AppState = {
@@ -12,6 +13,7 @@ type AppState = {
   replaceTimestamp: boolean;
   useJavaFormat: boolean;
   selectedTimezone: TimezoneType;
+  convertIsoDateTimesToMillis: boolean;
 };
 
 const SUPPORTED_TIMEZONES: TimezoneType[] = [
@@ -19,6 +21,14 @@ const SUPPORTED_TIMEZONES: TimezoneType[] = [
   "America/Chicago",
   "Europe/Amsterdam",
 ];
+
+const DEFAULT_APP_STATE: AppState = {
+  inputText: "",
+  replaceTimestamp: false,
+  useJavaFormat: false,
+  selectedTimezone: "America/Chicago",
+  convertIsoDateTimesToMillis: false,
+};
 
 const formatTimestamp = (date: Date, timezone: TimezoneType): string => {
   return format(date, "yyyy-MM-dd HH:mm:ssXXX", {
@@ -39,18 +49,13 @@ const loadStateFromStorage = (): AppState => {
   try {
     const savedState = localStorage.getItem(APP_STATE_STORAGE_KEY);
     if (savedState) {
-      return JSON.parse(savedState) as AppState;
+      return { ...DEFAULT_APP_STATE, ...JSON.parse(savedState) };
     }
   } catch (error) {
     console.error("Failed to load state from localStorage:", error);
   }
 
-  return {
-    inputText: "",
-    replaceTimestamp: false,
-    useJavaFormat: false,
-    selectedTimezone: "America/Chicago",
-  };
+  return DEFAULT_APP_STATE;
 };
 
 function App() {
@@ -108,26 +113,39 @@ function App() {
     let result = text;
 
     // Process millisecond timestamps (13 digits)
-    const matches: {
-      index: number;
-      match: string;
-      processor: (match: string) => string;
-    }[] = [];
 
-    const addMatches = (
+    const findMatches = (
+      text: string,
       regexPattern: RegExp,
       processor: (match: string) => string
     ) => {
       let match: RegExpExecArray | null;
+      const matches: {
+        index: number;
+        match: string;
+        processor: (match: string) => string;
+      }[] = [];
       while ((match = regexPattern.exec(text)) !== null) {
         matches.push({ index: match.index, match: match[0], processor });
       }
+      return matches;
     };
 
-    addMatches(/(\b\d{13}\b)/g, (match) => convertTimestamp(parseInt(match)));
-    addMatches(/(\b\d{10}\b)/g, (match) =>
-      convertTimestamp(parseInt(match) * 1000)
-    );
+    const matches = [
+      ...findMatches(text, /(\b\d{13}\b)/g, (match) =>
+        convertTimestamp(parseInt(match))
+      ),
+      ...findMatches(text, /(\b\d{10}\b)/g, (match) =>
+        convertTimestamp(parseInt(match) * 1000)
+      ),
+      ...(appState.convertIsoDateTimesToMillis
+        ? findMatches(
+            text,
+            /\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d(:[0-5]\d(\.\d+)?)?([+-][0-2]\d:[0-5]\d|Z)/g,
+            (match) => convertTimestamp(getTime(parseISO(match)))
+          )
+        : []),
+    ];
 
     const sortedMatches = _.orderBy(matches, ["index"], ["asc"]);
     const processedRanges: { start: number; end: number }[] = [];
@@ -186,6 +204,7 @@ function App() {
     appState.selectedTimezone,
     appState.replaceTimestamp,
     appState.useJavaFormat,
+    appState.convertIsoDateTimesToMillis,
   ]);
 
   // Apply decorations whenever highlightRanges changes
@@ -307,6 +326,22 @@ function App() {
             />
             <label htmlFor="java-format">Use Java datetime format</label>
           </div>
+          <div className="checkbox-control">
+            <input
+              type="checkbox"
+              id="convert-iso-date-times-to-millis"
+              checked={appState.convertIsoDateTimesToMillis}
+              onChange={(e) =>
+                setAppState({
+                  ...appState,
+                  convertIsoDateTimesToMillis: e.target.checked,
+                })
+              }
+            />
+            <label htmlFor="convert-iso-date-times-to-millis">
+              Convert ISO date times to milliseconds
+            </label>
+          </div>
         </div>
       </div>
       <div className="editor-container">
@@ -328,7 +363,7 @@ function App() {
           />
         </div>
         <div className="editor-wrapper">
-          <h2>Output (Converted Timestamps)</h2>
+          <h2>Output</h2>
           <Editor
             height="300px"
             defaultLanguage="plaintext"

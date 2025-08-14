@@ -1,62 +1,19 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import Editor, { Monaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import "./App.css";
 import { format } from "date-fns-tz";
 import _ from "lodash";
+import { computeMonacoEdits } from "./text-utils";
 
-import { diff_match_patch, Diff } from "diff-match-patch";
-
-function computeMonacoEdits(
-  oldText: string,
-  newText: string,
-  model: monaco.editor.ITextModel
-): monaco.editor.IIdentifiedSingleEditOperation[] {
-  const dmp = new diff_match_patch();
-  const diffs: Diff[] = dmp.diff_main(oldText, newText);
-  dmp.diff_cleanupEfficiency(diffs);
-
-  const edits: monaco.editor.IIdentifiedSingleEditOperation[] = [];
-  let index = 0;
-
-  for (const [op, text] of diffs) {
-    if (op === 0) {
-      // EQUAL
-      index += text.length;
-    } else if (op === -1) {
-      // DELETE
-      const start = model.getPositionAt(index);
-      const end = model.getPositionAt(index + text.length);
-      edits.push({
-        range: new monaco.Range(
-          start.lineNumber,
-          start.column,
-          end.lineNumber,
-          end.column
-        ),
-        text: "",
-      });
-      index += text.length;
-    } else if (op === 1) {
-      // INSERT
-      const pos = model.getPositionAt(index);
-      edits.push({
-        range: new monaco.Range(
-          pos.lineNumber,
-          pos.column,
-          pos.lineNumber,
-          pos.column
-        ),
-        text: text,
-      });
-    }
-  }
-
-  return edits;
-}
-
-// Timezone types
 type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam";
+type AppState = {
+  inputText: string;
+  replaceTimestamp: boolean;
+  useJavaFormat: boolean;
+  selectedTimezone: TimezoneType;
+};
+
 const SUPPORTED_TIMEZONES: TimezoneType[] = [
   "UTC",
   "America/Chicago",
@@ -69,24 +26,47 @@ const formatTimestamp = (date: Date, timezone: TimezoneType): string => {
   });
 };
 
-function App() {
-  const [inputText, setInputText] = useState<string>("");
-  const [selectedTimezone, setSelectedTimezone] =
-    useState<TimezoneType>("America/Chicago");
-  const [replaceTimestamp, setReplaceTimestamp] = useState<boolean>(false);
-  const [useJavaFormat, setUseJavaFormat] = useState<boolean>(false);
+const APP_STATE_STORAGE_KEY = "timestamp-converter-app-state";
+const debouncedStoreAppState = _.debounce((state: AppState) => {
+  try {
+    localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error("Failed to save state to localStorage:", error);
+  }
+}, 1000);
 
-  // References for Monaco editor instances
+const loadStateFromStorage = (): AppState => {
+  try {
+    const savedState = localStorage.getItem(APP_STATE_STORAGE_KEY);
+    if (savedState) {
+      return JSON.parse(savedState) as AppState;
+    }
+  } catch (error) {
+    console.error("Failed to load state from localStorage:", error);
+  }
+
+  return {
+    inputText: "",
+    replaceTimestamp: false,
+    useJavaFormat: false,
+    selectedTimezone: "America/Chicago",
+  };
+};
+
+function App() {
+  const [appState, setAppState] = useState<AppState>(loadStateFromStorage);
+  useEffect(() => {
+    debouncedStoreAppState(appState);
+  }, [appState]);
+
   const outputEditorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(
     null
   );
   const monacoRef = useRef<Monaco | null>(null);
 
-  // Reference for decorations collection
   const decorationsCollectionRef =
     useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
 
-  // Store the positions of converted timestamps for highlighting
   const [highlightRanges, setHighlightRanges] = useState<monaco.Range[]>([]);
 
   const convertTimestamp = (timestamp: number) => {
@@ -99,18 +79,18 @@ function App() {
         date.getFullYear() <= 2050
       ) {
         let formattedDate;
-        if (useJavaFormat) {
+        if (appState.useJavaFormat) {
           formattedDate = format(
             date,
-            "yyyy-MM-dd'T'HH:mm:ssXXX['" + selectedTimezone + "']",
+            "yyyy-MM-dd'T'HH:mm:ssXXX['" + appState.selectedTimezone + "']",
             {
-              timeZone: selectedTimezone,
+              timeZone: appState.selectedTimezone,
             }
           );
         } else {
-          formattedDate = formatTimestamp(date, selectedTimezone);
+          formattedDate = formatTimestamp(date, appState.selectedTimezone);
         }
-        return replaceTimestamp
+        return appState.replaceTimestamp
           ? formattedDate
           : `${timestamp} [${formattedDate}]`;
       }
@@ -173,12 +153,11 @@ function App() {
     return { text: result, ranges: processedRanges };
   };
 
-  useEffect(() => {
-    const result = convertTimestamps(inputText);
+  const updateOutput = () => {
     const editor = outputEditorRef.current?.getModel();
 
-    // Convert the ranges to Monaco Range objects
     if (editor) {
+      const result = convertTimestamps(appState.inputText);
       const oldText = editor.getValue();
       const newText = result.text;
       const edits = computeMonacoEdits(oldText, newText, editor);
@@ -198,7 +177,16 @@ function App() {
       });
       setHighlightRanges(newRanges);
     }
-  }, [inputText, selectedTimezone, replaceTimestamp, useJavaFormat]);
+  };
+
+  useEffect(() => {
+    updateOutput();
+  }, [
+    appState.inputText,
+    appState.selectedTimezone,
+    appState.replaceTimestamp,
+    appState.useJavaFormat,
+  ]);
 
   // Apply decorations whenever highlightRanges changes
   useEffect(() => {
@@ -233,7 +221,6 @@ function App() {
     outputEditorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Create initial decorations collection
     if (highlightRanges.length > 0) {
       const decorations = highlightRanges.map((range) => ({
         range,
@@ -245,19 +232,22 @@ function App() {
       decorationsCollectionRef.current =
         editor.createDecorationsCollection(decorations);
     }
+
+    updateOutput();
   };
   const handleClear = () => {
-    setInputText("");
+    setAppState({
+      ...appState,
+      inputText: "",
+    });
   };
 
   const handleInsertCurrentTimestamp = () => {
     const now = Date.now();
     const nowInSeconds = Math.floor(now / 1000);
-    setInputText((prev) => {
-      if (prev) {
-        return `${prev}\n\nCurrent Timestamps:\nMilliseconds: ${now}\nSeconds: ${nowInSeconds}`;
-      }
-      return `Current Timestamps:\nMilliseconds: ${now}\nSeconds: ${nowInSeconds}`;
+    setAppState({
+      ...appState,
+      inputText: `${appState.inputText}\n\nCurrent Timestamps:\nMilliseconds: ${now}\nSeconds: ${nowInSeconds}`,
     });
   };
 
@@ -271,9 +261,11 @@ function App() {
             <button
               key={timezone}
               className={`timezone-button ${
-                selectedTimezone === timezone ? "active" : ""
+                appState.selectedTimezone === timezone ? "active" : ""
               }`}
-              onClick={() => setSelectedTimezone(timezone)}
+              onClick={() =>
+                setAppState({ ...appState, selectedTimezone: timezone })
+              }
             >
               {timezone}
             </button>
@@ -297,8 +289,10 @@ function App() {
             <input
               type="checkbox"
               id="replace-timestamp"
-              checked={replaceTimestamp}
-              onChange={(e) => setReplaceTimestamp(e.target.checked)}
+              checked={appState.replaceTimestamp}
+              onChange={(e) =>
+                setAppState({ ...appState, replaceTimestamp: e.target.checked })
+              }
             />
             <label htmlFor="replace-timestamp">Replace timestamp</label>
           </div>
@@ -306,8 +300,10 @@ function App() {
             <input
               type="checkbox"
               id="java-format"
-              checked={useJavaFormat}
-              onChange={(e) => setUseJavaFormat(e.target.checked)}
+              checked={appState.useJavaFormat}
+              onChange={(e) =>
+                setAppState({ ...appState, useJavaFormat: e.target.checked })
+              }
             />
             <label htmlFor="java-format">Use Java datetime format</label>
           </div>
@@ -319,8 +315,10 @@ function App() {
           <Editor
             height="300px"
             defaultLanguage="plaintext"
-            value={inputText}
-            onChange={(value) => setInputText(value || "")}
+            value={appState.inputText}
+            onChange={(value) =>
+              setAppState({ ...appState, inputText: value || "" })
+            }
             theme="vs-dark"
             options={{
               minimap: { enabled: false },

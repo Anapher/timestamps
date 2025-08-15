@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Editor, { Monaco } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import "./App.css";
-import { format } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 import _ from "lodash";
 import { computeMonacoEdits } from "./text-utils";
 import { getTime, parseISO } from "date-fns";
@@ -28,12 +28,6 @@ const DEFAULT_APP_STATE: AppState = {
   useJavaFormat: false,
   selectedTimezone: "America/Chicago",
   convertIsoDateTimesToMillis: false,
-};
-
-const formatTimestamp = (date: Date, timezone: TimezoneType): string => {
-  return format(date, "yyyy-MM-dd HH:mm:ssXXX", {
-    timeZone: timezone,
-  });
 };
 
 const APP_STATE_STORAGE_KEY = "timestamp-converter-app-state";
@@ -83,18 +77,16 @@ function App() {
         date.getFullYear() >= 1975 &&
         date.getFullYear() <= 2050
       ) {
-        let formattedDate;
-        if (appState.useJavaFormat) {
-          formattedDate = format(
-            date,
-            "yyyy-MM-dd'T'HH:mm:ssXXX['" + appState.selectedTimezone + "']",
-            {
-              timeZone: appState.selectedTimezone,
-            }
-          );
-        } else {
-          formattedDate = formatTimestamp(date, appState.selectedTimezone);
-        }
+        const formatPattern = appState.useJavaFormat
+          ? "yyyy-MM-dd'T'HH:mm:ssXXX['" + appState.selectedTimezone + "']"
+          : "yyyy-MM-dd HH:mm:ssXXX";
+
+        const formattedDate = formatInTimeZone(
+          date,
+          appState.selectedTimezone,
+          formatPattern
+        );
+
         return appState.replaceTimestamp
           ? formattedDate
           : `${timestamp} [${formattedDate}]`;

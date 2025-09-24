@@ -124,6 +124,9 @@ function App() {
     };
 
     const matches = [
+      ...findMatches(text, /(\b\d{16}\b)/g, (match) =>
+        convertTimestamp(parseInt(match) / 1000)
+      ),
       ...findMatches(text, /(\b\d{13}\b)/g, (match) =>
         convertTimestamp(parseInt(match))
       ),

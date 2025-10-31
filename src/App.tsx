@@ -14,6 +14,7 @@ type AppState = {
   useJavaFormat: boolean;
   selectedTimezone: TimezoneType;
   convertIsoDateTimesToMillis: boolean;
+  showWeekDay: boolean;
 };
 
 const SUPPORTED_TIMEZONES: TimezoneType[] = [
@@ -28,6 +29,7 @@ const DEFAULT_APP_STATE: AppState = {
   useJavaFormat: false,
   selectedTimezone: "America/Chicago",
   convertIsoDateTimesToMillis: false,
+  showWeekDay: false,
 };
 
 const APP_STATE_STORAGE_KEY = "timestamp-converter-app-state";
@@ -77,9 +79,13 @@ function App() {
         date.getFullYear() >= 1975 &&
         date.getFullYear() <= 2050
       ) {
-        const formatPattern = appState.useJavaFormat
+        let formatPattern = appState.useJavaFormat
           ? "yyyy-MM-dd'T'HH:mm:ssXXX['" + appState.selectedTimezone + "']"
           : "yyyy-MM-dd HH:mm:ssXXX";
+
+        if (appState.showWeekDay) {
+          formatPattern += " EEEE";
+        }
 
         const formattedDate = formatInTimeZone(
           date,
@@ -200,6 +206,7 @@ function App() {
     appState.replaceTimestamp,
     appState.useJavaFormat,
     appState.convertIsoDateTimesToMillis,
+    appState.showWeekDay,
   ]);
 
   // Apply decorations whenever highlightRanges changes
@@ -336,6 +343,20 @@ function App() {
             <label htmlFor="convert-iso-date-times-to-millis">
               Convert ISO date times to milliseconds
             </label>
+          </div>
+          <div className="checkbox-control">
+            <input
+              type="checkbox"
+              id="show-week-days"
+              checked={appState.showWeekDay}
+              onChange={(e) =>
+                setAppState({
+                  ...appState,
+                  showWeekDay: e.target.checked,
+                })
+              }
+            />
+            <label htmlFor="show-week-days">Show week days</label>
           </div>
         </div>
       </div>

@@ -7,7 +7,7 @@ import _ from "lodash";
 import { computeMonacoEdits } from "./text-utils";
 import { getTime, parseISO } from "date-fns";
 
-type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam";
+type TimezoneType = "UTC" | "America/Chicago" | "Europe/Amsterdam" | "Asia/Kolkata" | "Asia/Hong_Kong" | "Australia/Sydney" | "Asia/Tokyo";
 type AppState = {
   inputText: string;
   replaceTimestamp: boolean;
@@ -20,6 +20,10 @@ type AppState = {
 const SUPPORTED_TIMEZONES: TimezoneType[] = [
   "UTC",
   "America/Chicago",
+  "Asia/Hong_Kong",
+  "Asia/Kolkata",
+  "Asia/Tokyo",
+  "Australia/Sydney",
   "Europe/Amsterdam",
 ];
 
